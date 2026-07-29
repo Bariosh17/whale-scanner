@@ -52,6 +52,7 @@ def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
             payload = resp.json()
 
             if payload.get("status") == "error" or "values" not in payload:
+                print(f"[volume] {ticker} error: {payload}")
                 continue
 
             # Twelve Data returns newest first
@@ -81,7 +82,8 @@ def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
                 "day_change_pct": round(price_change_pct, 2),
                 "unusual": ratio >= volume_multiple,
             })
-        except Exception:
+        except Exception as e:
+            print(f"[volume] {ticker} exception: {e}")
             continue
 
     return sorted(results, key=lambda r: r["ratio"], reverse=True)
@@ -89,31 +91,50 @@ def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
 
 def get_upcoming_earnings(tickers):
     """
-    Pulls each ticker's next earnings date using Twelve Data's /earnings
-    endpoint, which includes forward estimates alongside history.
+    Pulls each ticker's next earnings date using Twelve Data's
+    /earnings_calendar endpoint (forward-looking dates), not /earnings
+    (which only returns historical actual EPS).
     """
     if not TWELVE_DATA_API_KEY:
         return []
 
     today = datetime.now().date()
+    end = today + timedelta(days=180)
     results = []
 
     for ticker in tickers:
         try:
-            url = "https://api.twelvedata.com/earnings"
-            params = {"symbol": ticker, "apikey": TWELVE_DATA_API_KEY}
+            url = "https://api.twelvedata.com/earnings_calendar"
+            params = {
+                "symbol": ticker,
+                "start_date": today.isoformat(),
+                "end_date": end.isoformat(),
+                "apikey": TWELVE_DATA_API_KEY,
+            }
             resp = requests.get(url, params=params, timeout=10)
             payload = resp.json()
 
-            if payload.get("status") == "error":
+            if isinstance(payload, dict) and payload.get("status") == "error":
+                print(f"[earnings] {ticker} error: {payload}")
                 continue
 
             rows = payload.get("earnings", payload if isinstance(payload, list) else [])
+            if isinstance(rows, dict):
+                # some responses group rows by date key -> list of entries
+                flat = []
+                for entries in rows.values():
+                    if isinstance(entries, list):
+                        flat.extend(entries)
+                rows = flat
+
             upcoming = None
             for row in rows:
+                date_str = row.get("date") or row.get("report_date")
+                if not date_str:
+                    continue
                 try:
-                    row_date = datetime.strptime(row["date"], "%Y-%m-%d").date()
-                except (KeyError, ValueError):
+                    row_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                except ValueError:
                     continue
                 if row_date >= today and (upcoming is None or row_date < upcoming["date"]):
                     upcoming = {
@@ -125,7 +146,8 @@ def get_upcoming_earnings(tickers):
 
             if upcoming:
                 results.append(upcoming)
-        except Exception:
+        except Exception as e:
+            print(f"[earnings] {ticker} exception: {e}")
             continue
 
     results.sort(key=lambda r: r["date"])

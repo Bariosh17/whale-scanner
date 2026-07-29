@@ -24,8 +24,6 @@ DEFAULT_WATCHLIST = [
     "JPM", "BAC", "DIS", "INTC",
 ]
 
-EODHD_API_KEY = None  # add a key here to activate congress trade tracking
-
 # Used to filter the market-wide earnings calendar down to companies people
 # actually recognize, instead of every obscure small-cap reporting that week.
 POPULAR_TICKERS = {
@@ -49,6 +47,91 @@ POPULAR_TICKERS = {
 # Get a free key at https://twelvedata.com and set it as an environment
 # variable called TWELVE_DATA_API_KEY (in Render: Settings > Environment).
 TWELVE_DATA_API_KEY = os.environ.get("TWELVE_DATA_API_KEY")
+
+# Miles & Gario's actual holdings, pulled from the "Buy" transaction rows in
+# the portfolio export (MSP-Portfolios-2026-07-29.csv). Shares and cost/share
+# are exactly as recorded there.
+PORTFOLIO_HOLDINGS = [
+    {"ticker": "MSFT", "shares": 5.811, "cost_per_share": 430.20},
+    {"ticker": "NFLX", "shares": 30.095, "cost_per_share": 83.07},
+    {"ticker": "AMZN", "shares": 25.026, "cost_per_share": 199.79},
+    {"ticker": "GLD", "shares": 10.427, "cost_per_share": 215.28},
+    {"ticker": "IWM", "shares": 11.09, "cost_per_share": 202.88},
+    {"ticker": "NVDA", "shares": 37.165, "cost_per_share": 134.54},
+    {"ticker": "QQQ", "shares": 6.616, "cost_per_share": 453.38},
+    {"ticker": "SPY", "shares": 5.704, "cost_per_share": 525.89},
+    {"ticker": "VOO", "shares": 4.568, "cost_per_share": 483.04},
+    {"ticker": "VTI", "shares": 8.653, "cost_per_share": 260.02},
+    {"ticker": "META", "shares": 2.905, "cost_per_share": 688.39},
+    {"ticker": "GOOG", "shares": 5.876, "cost_per_share": 340.35},
+    {"ticker": "SMCI", "shares": 67.636, "cost_per_share": 29.57},
+    {"ticker": "SPCX", "shares": 24.636, "cost_per_share": 162.36},
+    {"ticker": "RDDT", "shares": 15.501, "cost_per_share": 161.27},
+    {"ticker": "OTLK", "shares": 14.576993, "cost_per_share": 1.43},
+]
+
+
+def get_portfolio():
+    """
+    Live valuation of PORTFOLIO_HOLDINGS: pulls current price per ticker from
+    Twelve Data's lightweight /price endpoint (1 credit each) and computes
+    cost basis, market value, and gain/loss for each position plus totals.
+    """
+    if not TWELVE_DATA_API_KEY:
+        return {"positions": [], "totals": None}
+
+    positions = []
+    for h in PORTFOLIO_HOLDINGS:
+        ticker = h["ticker"]
+        shares = h["shares"]
+        cost_per_share = h["cost_per_share"]
+        current_price = None
+        try:
+            url = "https://api.twelvedata.com/price"
+            params = {"symbol": ticker, "apikey": TWELVE_DATA_API_KEY}
+            resp = requests.get(url, params=params, timeout=10)
+            payload = resp.json()
+            if "price" in payload:
+                current_price = float(payload["price"])
+            else:
+                print(f"[portfolio] {ticker} error: {payload}")
+        except Exception as e:
+            print(f"[portfolio] {ticker} exception: {e}")
+
+        cost_basis = shares * cost_per_share
+        if current_price is not None:
+            market_value = shares * current_price
+            gain_loss = market_value - cost_basis
+            gain_loss_pct = (gain_loss / cost_basis * 100) if cost_basis else 0
+        else:
+            market_value = gain_loss = gain_loss_pct = None
+
+        positions.append({
+            "ticker": ticker,
+            "shares": shares,
+            "cost_per_share": cost_per_share,
+            "cost_basis": round(cost_basis, 2),
+            "current_price": round(current_price, 2) if current_price is not None else None,
+            "market_value": round(market_value, 2) if market_value is not None else None,
+            "gain_loss": round(gain_loss, 2) if gain_loss is not None else None,
+            "gain_loss_pct": round(gain_loss_pct, 2) if gain_loss is not None else None,
+        })
+
+    priced = [p for p in positions if p["market_value"] is not None]
+    if priced:
+        total_cost = sum(p["cost_basis"] for p in priced)
+        total_value = sum(p["market_value"] for p in priced)
+        total_gain = total_value - total_cost
+        totals = {
+            "cost_basis": round(total_cost, 2),
+            "market_value": round(total_value, 2),
+            "gain_loss": round(total_gain, 2),
+            "gain_loss_pct": round(total_gain / total_cost * 100, 2) if total_cost else 0,
+        }
+    else:
+        totals = None
+
+    return {"positions": positions, "totals": totals}
 
 
 def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
@@ -221,46 +304,6 @@ def get_recent_insider_filings(ticker, days_back=30, limit=5):
     return filings
 
 
-def get_congress_trades(ticker=None, limit=20):
-    if not EODHD_API_KEY:
-        return {"active": False, "trades": []}
-
-    url = "https://eodhd.com/api/congressional-trades"
-    params = {"api_token": EODHD_API_KEY, "limit": limit}
-    if ticker:
-        params["symbol"] = ticker
-
-    resp = requests.get(url, params=params, timeout=10)
-    resp.raise_for_status()
-    return {"active": True, "trades": resp.json().get("data", [])}
-
-
-def get_congress_trades_finnhub(ticker="AAPL"):
-    """
-    Quick test of Finnhub's congressional trading endpoint. One SDK's docs
-    list this as a premium-only endpoint, so this is likely to fail on a
-    free key — but cheap to confirm either way.
-    """
-    if not FINNHUB_API_KEY:
-        return {"active": False, "trades": [], "note": "no FINNHUB_API_KEY set"}
-
-    try:
-        url = "https://finnhub.io/api/v1/stock/congressional-trading"
-        params = {"symbol": ticker, "token": FINNHUB_API_KEY}
-        resp = requests.get(url, params=params, timeout=10)
-        print(f"[congress-finnhub] status={resp.status_code} body={resp.text[:300]}")
-
-        if resp.status_code != 200:
-            return {"active": False, "trades": [], "note": f"HTTP {resp.status_code}"}
-
-        payload = resp.json()
-        trades = payload.get("data", [])
-        return {"active": True, "trades": trades}
-    except Exception as e:
-        print(f"[congress-finnhub] exception: {e}")
-        return {"active": False, "trades": [], "note": str(e)}
-
-
 # ---------------------------------------------------------------------------
 # UNUSUAL OPTIONS ACTIVITY (calls vs puts) — Market Data (marketdata.app)
 # ---------------------------------------------------------------------------
@@ -272,6 +315,73 @@ def get_congress_trades_finnhub(ticker="AAPL"):
 # nearest ~30-day expiration to keep credit usage low.
 
 MARKETDATA_API_KEY = os.environ.get("MARKETDATA_API_KEY")
+
+# Miles & Gario's actual options positions, tracked live against the real
+# market (via Market Data's quote endpoint) rather than estimated.
+OPTIONS_POSITIONS = [
+    {
+        "ticker": "NOW", "side": "call", "strike": 114,
+        "expiration": "2026-07-31", "contracts": 1,
+        "avg_cost": 1.95, "date_bought": "2026-07-22",
+    },
+]
+
+
+def _occ_symbol(ticker, expiration, side, strike):
+    """Builds an OCC option symbol, e.g. NOW260731C00114000."""
+    exp = datetime.strptime(expiration, "%Y-%m-%d").strftime("%y%m%d")
+    side_code = "C" if side.lower() == "call" else "P"
+    strike_code = f"{int(round(strike * 1000)):08d}"
+    return f"{ticker.upper()}{exp}{side_code}{strike_code}"
+
+
+def get_options_positions():
+    """
+    Live valuation of OPTIONS_POSITIONS via Market Data's single-contract
+    quote endpoint — real bid/ask/mid pricing, not a theoretical estimate.
+    """
+    if not MARKETDATA_API_KEY:
+        return []
+
+    headers = {"Authorization": f"Bearer {MARKETDATA_API_KEY}"}
+    results = []
+
+    for pos in OPTIONS_POSITIONS:
+        symbol = _occ_symbol(pos["ticker"], pos["expiration"], pos["side"], pos["strike"])
+        entry = {**pos, "symbol": symbol, "current_price": None, "underlying_price": None}
+
+        try:
+            url = f"https://api.marketdata.app/v1/options/quotes/{symbol}/"
+            resp = requests.get(url, headers=headers, timeout=10)
+            payload = resp.json()
+
+            if payload.get("s") != "ok":
+                print(f"[options-position] {symbol} error: {payload}")
+            else:
+                mid = payload.get("mid", [None])[0]
+                last = payload.get("last", [None])[0]
+                entry["current_price"] = mid if mid is not None else last
+                entry["underlying_price"] = payload.get("underlyingPrice", [None])[0]
+                entry["delta"] = payload.get("delta", [None])[0]
+                entry["iv"] = payload.get("iv", [None])[0]
+        except Exception as e:
+            print(f"[options-position] {symbol} exception: {e}")
+
+        cost_basis = pos["avg_cost"] * 100 * pos["contracts"]
+        if entry["current_price"] is not None:
+            market_value = entry["current_price"] * 100 * pos["contracts"]
+            gain_loss = market_value - cost_basis
+            gain_loss_pct = (gain_loss / cost_basis * 100) if cost_basis else 0
+        else:
+            market_value = gain_loss = gain_loss_pct = None
+
+        entry["cost_basis"] = round(cost_basis, 2)
+        entry["market_value"] = round(market_value, 2) if market_value is not None else None
+        entry["gain_loss"] = round(gain_loss, 2) if gain_loss is not None else None
+        entry["gain_loss_pct"] = round(gain_loss_pct, 2) if gain_loss is not None else None
+        results.append(entry)
+
+    return results
 
 
 def scan_unusual_options(tickers, volume_oi_ratio=1.0, min_volume=100):
@@ -311,6 +421,19 @@ def scan_unusual_options(tickers, volume_oi_ratio=1.0, min_volume=100):
                     "expiration": datetime.fromtimestamp(
                         payload["expiration"][i]
                     ).strftime("%Y-%m-%d"),
+                    "price": payload.get("underlyingPrice", [None])[i],
+                    "bid": payload.get("bid", [None])[i],
+                    "ask": payload.get("ask", [None])[i],
+                    "iv": payload.get("iv", [None])[i],
+                    "delta": payload.get("delta", [None])[i],
+                    "premium": (
+                        round(payload.get("mid", [0])[i] * volume * 100, 2)
+                        if payload.get("mid", [None])[i] is not None else None
+                    ),
+                    "updated": (
+                        datetime.fromtimestamp(payload["updated"][i]).strftime("%m/%d/%Y")
+                        if payload.get("updated", [None])[i] else ""
+                    ),
                 })
         except Exception:
             continue

@@ -24,6 +24,7 @@ VOLUME_CACHE_SECONDS = 60 * 60        # 1 hour  (~20 calls x ~24/day = 480/day)
 OPTIONS_CACHE_SECONDS = 60 * 60       # 1 hour  (separate provider/quota)
 EARNINGS_CACHE_SECONDS = 24 * 60 * 60  # 1 day   (~20 calls/day)
 INSIDER_CACHE_SECONDS = 60 * 60 * 4   # 4 hours (SEC, no quota, just politeness)
+PORTFOLIO_CACHE_SECONDS = 60 * 60 * 2  # 2 hours (~15 calls x 12/day = 180/day)
 
 _cache = {}  # key -> {"timestamp": float, "data": ...}
 
@@ -61,13 +62,10 @@ def get_report_data():
         return filings
 
     insider_filings = _cached("insider", INSIDER_CACHE_SECONDS, _fetch_insider)
-    congress = scanner.get_congress_trades()  # no-op / instant until a key is added
-
-    # One-off test: does the free Finnhub key unlock congressional trading?
-    # Cached for a day so it only actually calls Finnhub once — check Render
-    # logs for a line starting with [congress-finnhub] to see the result.
-    _cached("congress_finnhub_test", 24 * 60 * 60,
-            lambda: scanner.get_congress_trades_finnhub())
+    portfolio = _cached("portfolio", PORTFOLIO_CACHE_SECONDS, scanner.get_portfolio)
+    options_positions = _cached(
+        "options_positions", OPTIONS_CACHE_SECONDS, scanner.get_options_positions
+    )
 
     return {
         "generated_at": datetime.now().strftime("%b %d, %Y — %H:%M"),
@@ -77,9 +75,10 @@ def get_report_data():
         "options": options_data,
         "options_key_missing": not bool(scanner.MARKETDATA_API_KEY),
         "insider": insider_filings,
-        "congress": congress,
         "earnings": earnings_data,
         "earnings_key_missing": not bool(scanner.FINNHUB_API_KEY),
+        "portfolio": portfolio,
+        "options_positions": options_positions,
     }
 
 

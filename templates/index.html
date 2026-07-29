@@ -74,28 +74,43 @@
     </table>
   </section>
 
-  <section class="panel">
+  <section class="panel full-width">
     <div class="panel-head">
       <h2>Unusual Options Activity</h2>
       <span class="panel-tag">Market Data · OPRA</span>
     </div>
-    <table class="data-table">
+    <div class="table-scroll">
+    <table class="data-table wide">
       <thead>
-        <tr><th>Ticker</th><th>Side</th><th>Strike</th><th>Exp</th><th>Vol / OI</th></tr>
+        <tr>
+          <th>Symbol</th><th>Price</th><th>Type</th><th>Strike</th><th>Expires</th>
+          <th>DTE</th><th>Bid</th><th>Ask</th><th>Premium</th><th>Volume</th>
+          <th>Open Int</th><th>IV</th><th>Delta</th><th>Date</th>
+        </tr>
       </thead>
       <tbody>
         {% for row in data.options %}
         <tr class="flag">
           <td class="mono ticker">{{ row.ticker }}</td>
+          <td class="mono">{{ "%.2f"|format(row.price) if row.price else '—' }}</td>
           <td class="mono side-{{ row.side }}">{{ row.side|upper }}</td>
-          <td class="mono">${{ "%.2f"|format(row.strike) }}</td>
-          <td class="mono">{{ row.expiration }} ({{ row.dte }}d)</td>
-          <td class="mono">{{ "{:,}".format(row.volume) }} / {{ "{:,}".format(row.open_interest) }}
+          <td class="mono">{{ "%.2f"|format(row.strike) }}</td>
+          <td class="mono">{{ row.expiration }}</td>
+          <td class="mono">{{ row.dte }}</td>
+          <td class="mono">{{ "%.2f"|format(row.bid) if row.bid is not none else '—' }}</td>
+          <td class="mono">{{ "%.2f"|format(row.ask) if row.ask is not none else '—' }}</td>
+          <td class="mono">{{ "${:,.0f}".format(row.premium) if row.premium else '—' }}</td>
+          <td class="mono">{{ "{:,}".format(row.volume) }}</td>
+          <td class="mono">
+            {{ "{:,}".format(row.open_interest) }}
             {% if row.ratio %}<span class="ratio-label">{{ row.ratio }}x</span>{% endif %}
           </td>
+          <td class="mono">{{ "%.1f%%"|format(row.iv * 100) if row.iv is not none else '—' }}</td>
+          <td class="mono">{{ "%.3f"|format(row.delta) if row.delta is not none else '—' }}</td>
+          <td class="mono">{{ row.updated }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="empty">
+        <tr><td colspan="14" class="empty">
           {% if data.options_key_missing %}
             Add a free-trial MARKETDATA_API_KEY environment variable to activate this panel.
           {% else %}
@@ -105,6 +120,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </section>
 
   <section class="panel">
@@ -149,23 +165,107 @@
     </ul>
   </section>
 
-  <section class="panel locked-panel">
+  <section class="panel full-width">
     <div class="panel-head">
-      <h2>Congress Trades</h2>
-      <span class="panel-tag">Requires API key</span>
+      <h2>Current Options Play</h2>
+      <span class="panel-tag">Market Data · live</span>
     </div>
-    {% if data.congress.active %}
-      <ul class="filing-list">
-        {% for t in data.congress.trades %}
-        <li>{{ t }}</li>
+    <div class="table-scroll">
+    <table class="data-table wide">
+      <thead>
+        <tr>
+          <th>Contract</th><th>Bought</th><th>Exp</th><th>Contracts</th>
+          <th>Avg Cost</th><th>Current Price</th><th>Underlying</th>
+          <th>Cost Basis</th><th>Market Value</th><th>Gain / Loss</th><th>Gain / Loss %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in data.options_positions %}
+        <tr class="flag">
+          <td class="mono ticker">{{ p.ticker }} ${{ "%.0f"|format(p.strike) }} {{ p.side|upper }}</td>
+          <td class="mono">{{ p.date_bought }}</td>
+          <td class="mono">{{ p.expiration }}</td>
+          <td class="mono">{{ p.contracts }}</td>
+          <td class="mono">${{ "%.2f"|format(p.avg_cost) }}</td>
+          {% if p.current_price is not none %}
+          <td class="mono">${{ "%.2f"|format(p.current_price) }}</td>
+          <td class="mono">${{ "%.2f"|format(p.underlying_price) if p.underlying_price else '—' }}</td>
+          <td class="mono">${{ "{:,.2f}".format(p.cost_basis) }}</td>
+          <td class="mono">${{ "{:,.2f}".format(p.market_value) }}</td>
+          <td class="mono {{ 'up' if p.gain_loss >= 0 else 'down' }}">
+            {{ '+' if p.gain_loss >= 0 else '' }}${{ "{:,.2f}".format(p.gain_loss) }}
+          </td>
+          <td class="mono {{ 'up' if p.gain_loss_pct >= 0 else 'down' }}">
+            {{ '+' if p.gain_loss_pct >= 0 else '' }}{{ "%.2f"|format(p.gain_loss_pct) }}%
+          </td>
+          {% else %}
+          <td class="mono empty" colspan="6">live price unavailable</td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="11" class="empty">Add a free-trial MARKETDATA_API_KEY environment variable to activate this panel.</td></tr>
         {% endfor %}
-      </ul>
-    {% else %}
-      <div class="locked-msg">
-        <p>The free congressional-trade feeds went offline in early 2026.</p>
-        <p>Add an API key (e.g. from EODHD) to <code>scanner.py</code> to activate this panel.</p>
-      </div>
-    {% endif %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="panel full-width">
+    <div class="panel-head">
+      <h2>Miles &amp; Gario's Portfolio</h2>
+      <span class="panel-tag">Twelve Data · live pricing</span>
+    </div>
+    <div class="table-scroll">
+    <table class="data-table wide">
+      <thead>
+        <tr>
+          <th>Symbol</th><th>Shares</th><th>Cost / Share</th><th>Cost Basis</th>
+          <th>Current Price</th><th>Market Value</th><th>Gain / Loss</th><th>Gain / Loss %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in data.portfolio.positions %}
+        <tr>
+          <td class="mono ticker">{{ p.ticker }}</td>
+          <td class="mono">{{ "%.3f"|format(p.shares) }}</td>
+          <td class="mono">${{ "%.2f"|format(p.cost_per_share) }}</td>
+          <td class="mono">${{ "{:,.2f}".format(p.cost_basis) }}</td>
+          {% if p.current_price is not none %}
+          <td class="mono">${{ "%.2f"|format(p.current_price) }}</td>
+          <td class="mono">${{ "{:,.2f}".format(p.market_value) }}</td>
+          <td class="mono {{ 'up' if p.gain_loss >= 0 else 'down' }}">
+            {{ '+' if p.gain_loss >= 0 else '' }}${{ "{:,.2f}".format(p.gain_loss) }}
+          </td>
+          <td class="mono {{ 'up' if p.gain_loss_pct >= 0 else 'down' }}">
+            {{ '+' if p.gain_loss_pct >= 0 else '' }}{{ "%.2f"|format(p.gain_loss_pct) }}%
+          </td>
+          {% else %}
+          <td class="mono empty" colspan="4">price unavailable</td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="empty">Add a free TWELVE_DATA_API_KEY environment variable to activate this panel.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if data.portfolio.totals %}
+      <tfoot>
+        <tr class="totals-row">
+          <td class="mono ticker">TOTAL</td>
+          <td></td><td></td>
+          <td class="mono">${{ "{:,.2f}".format(data.portfolio.totals.cost_basis) }}</td>
+          <td></td>
+          <td class="mono">${{ "{:,.2f}".format(data.portfolio.totals.market_value) }}</td>
+          <td class="mono {{ 'up' if data.portfolio.totals.gain_loss >= 0 else 'down' }}">
+            {{ '+' if data.portfolio.totals.gain_loss >= 0 else '' }}${{ "{:,.2f}".format(data.portfolio.totals.gain_loss) }}
+          </td>
+          <td class="mono {{ 'up' if data.portfolio.totals.gain_loss_pct >= 0 else 'down' }}">
+            {{ '+' if data.portfolio.totals.gain_loss_pct >= 0 else '' }}{{ "%.2f"|format(data.portfolio.totals.gain_loss_pct) }}%
+          </td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+    </div>
   </section>
 
 </main>

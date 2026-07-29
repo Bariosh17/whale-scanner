@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whale Scanner — Market Activity Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="tape-wrap" aria-hidden="true">
+  <div class="tape">
+    {% for row in (data.volume + data.volume) %}
+    <span class="tape-item {{ 'up' if row.day_change_pct >= 0 else 'down' }}">
+      {{ row.ticker }} <b>{{ row.ratio }}x</b> {{ "%.2f"|format(row.day_change_pct) }}%
+    </span>
+    {% endfor %}
+  </div>
+</div>
+
+<header class="desk-header">
+  <div class="brand">
+    <span class="brand-mark">◆</span>
+    <div>
+      <h1>WHALE SCANNER</h1>
+      <p class="sub">Unusual activity desk — free data, no black box</p>
+    </div>
+  </div>
+  <div class="header-meta">
+    <span class="dot live"></span>
+    <span id="timestamp">Updated {{ data.generated_at }}</span>
+    <button id="refreshBtn" class="refresh-btn">Refresh</button>
+  </div>
+</header>
+
+<main class="grid">
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Unusual Volume</h2>
+      <span class="panel-tag">Yahoo Finance · live</span>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Ticker</th><th>Price</th><th>Day</th><th>Vol / Avg</th><th></th></tr>
+      </thead>
+      <tbody id="volumeBody">
+        {% for row in data.volume %}
+        <tr class="{{ 'flag' if row.unusual else '' }}">
+          <td class="mono ticker">{{ row.ticker }}</td>
+          <td class="mono">${{ "%.2f"|format(row.price) }}</td>
+          <td class="mono {{ 'up' if row.day_change_pct >= 0 else 'down' }}">
+            {{ "%.2f"|format(row.day_change_pct) }}%
+          </td>
+          <td class="mono">{{ "{:,}".format(row.volume) }} / {{ "{:,}".format(row.avg_volume) }}</td>
+          <td class="bar-cell">
+            <div class="bar" style="width: {{ [row.ratio * 18, 100]|min }}px;"></div>
+            <span class="ratio-label">{{ row.ratio }}x</span>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">No unusual volume in the watchlist right now.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Insider Filings</h2>
+      <span class="panel-tag">SEC EDGAR · Form 4</span>
+    </div>
+    <ul class="filing-list" id="insiderList">
+      {% for f in data.insider %}
+      <li>
+        <span class="mono ticker">{{ f.ticker }}</span>
+        <span class="filing-date">{{ f.date }}</span>
+        <a href="{{ f.url }}" target="_blank" rel="noopener">view filing →</a>
+      </li>
+      {% else %}
+      <li class="empty">No Form 4 filings in the last 30 days for the watched tickers.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel locked-panel">
+    <div class="panel-head">
+      <h2>Congress Trades</h2>
+      <span class="panel-tag">Requires API key</span>
+    </div>
+    {% if data.congress.active %}
+      <ul class="filing-list">
+        {% for t in data.congress.trades %}
+        <li>{{ t }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="locked-msg">
+        <p>The free congressional-trade feeds went offline in early 2026.</p>
+        <p>Add an API key (e.g. from EODHD) to <code>scanner.py</code> to activate this panel.</p>
+      </div>
+    {% endif %}
+  </section>
+
+</main>
+
+<footer>
+  <p>Data: Yahoo Finance &amp; SEC EDGAR, public sources. Not financial advice. Unusual volume ≠ insider knowledge.</p>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

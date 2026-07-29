@@ -128,7 +128,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Upcoming Earnings</h2>
-      <span class="panel-tag">Twelve Data</span>
+      <span class="panel-tag">Finnhub</span>
     </div>
     <ul class="filing-list">
       {% for e in data.earnings %}
@@ -138,7 +138,13 @@
         {% if e.eps_estimate %}<span class="ratio-label">est. EPS {{ e.eps_estimate }}</span>{% endif %}
       </li>
       {% else %}
-      <li class="empty">No upcoming earnings dates found for the watchlist.</li>
+      <li class="empty">
+        {% if data.earnings_key_missing %}
+          Add a free FINNHUB_API_KEY environment variable to activate this panel.
+        {% else %}
+          No upcoming earnings found in the next two weeks.
+        {% endif %}
+      </li>
       {% endfor %}
     </ul>
   </section>

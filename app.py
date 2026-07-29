@@ -63,6 +63,12 @@ def get_report_data():
     insider_filings = _cached("insider", INSIDER_CACHE_SECONDS, _fetch_insider)
     congress = scanner.get_congress_trades()  # no-op / instant until a key is added
 
+    # One-off test: does the free Finnhub key unlock congressional trading?
+    # Cached for a day so it only actually calls Finnhub once — check Render
+    # logs for a line starting with [congress-finnhub] to see the result.
+    _cached("congress_finnhub_test", 24 * 60 * 60,
+            lambda: scanner.get_congress_trades_finnhub())
+
     return {
         "generated_at": datetime.now().strftime("%b %d, %Y — %H:%M"),
         "watchlist": watchlist,
@@ -73,6 +79,7 @@ def get_report_data():
         "insider": insider_filings,
         "congress": congress,
         "earnings": earnings_data,
+        "earnings_key_missing": not bool(scanner.FINNHUB_API_KEY),
     }
 
 

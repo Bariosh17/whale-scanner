@@ -89,45 +89,43 @@ def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
     return sorted(results, key=lambda r: r["ratio"], reverse=True)
 
 
+# Twelve Data's /earnings_calendar requires a paid Grow-plan-or-higher key
+# (confirmed via a 403 in production), so upcoming earnings are pulled from
+# Finnhub instead — free tier, no credit card, genuinely includes this data.
+# Get a free key at https://finnhub.io, set it as FINNHUB_API_KEY.
+FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY")
+
+
 def get_upcoming_earnings(days_ahead=14, limit=40):
     """
     Pulls the market-wide earnings calendar (not filtered to any watchlist)
-    using Twelve Data's /earnings_calendar endpoint. One API call instead of
-    one per ticker — cheaper and simpler.
+    from Finnhub's free /calendar/earnings endpoint.
     """
-    if not TWELVE_DATA_API_KEY:
+    if not FINNHUB_API_KEY:
         return []
 
     today = datetime.now().date()
     end = today + timedelta(days=days_ahead)
 
     try:
-        url = "https://api.twelvedata.com/earnings_calendar"
+        url = "https://finnhub.io/api/v1/calendar/earnings"
         params = {
-            "start_date": today.isoformat(),
-            "end_date": end.isoformat(),
-            "apikey": TWELVE_DATA_API_KEY,
+            "from": today.isoformat(),
+            "to": end.isoformat(),
+            "token": FINNHUB_API_KEY,
         }
         resp = requests.get(url, params=params, timeout=15)
         payload = resp.json()
 
-        if isinstance(payload, dict) and payload.get("status") == "error":
+        if isinstance(payload, dict) and payload.get("error"):
             print(f"[earnings] error: {payload}")
             return []
 
-        rows = payload.get("earnings", payload if isinstance(payload, list) else [])
-        if isinstance(rows, dict):
-            # some responses group rows by date key -> list of entries
-            flat = []
-            for entries in rows.values():
-                if isinstance(entries, list):
-                    flat.extend(entries)
-            rows = flat
-
+        rows = payload.get("earningsCalendar", [])
         results = []
         for row in rows:
-            date_str = row.get("date") or row.get("report_date")
-            symbol = row.get("symbol") or row.get("ticker")
+            date_str = row.get("date")
+            symbol = row.get("symbol")
             if not date_str or not symbol:
                 continue
             try:
@@ -139,8 +137,8 @@ def get_upcoming_earnings(days_ahead=14, limit=40):
             results.append({
                 "ticker": symbol,
                 "date": row_date,
-                "time": row.get("time", ""),
-                "eps_estimate": row.get("eps_estimate"),
+                "time": row.get("hour", ""),  # "bmo" / "amc" / "dmh"
+                "eps_estimate": row.get("epsEstimate"),
             })
 
         results.sort(key=lambda r: r["date"])
@@ -216,6 +214,32 @@ def get_congress_trades(ticker=None, limit=20):
     resp = requests.get(url, params=params, timeout=10)
     resp.raise_for_status()
     return {"active": True, "trades": resp.json().get("data", [])}
+
+
+def get_congress_trades_finnhub(ticker="AAPL"):
+    """
+    Quick test of Finnhub's congressional trading endpoint. One SDK's docs
+    list this as a premium-only endpoint, so this is likely to fail on a
+    free key — but cheap to confirm either way.
+    """
+    if not FINNHUB_API_KEY:
+        return {"active": False, "trades": [], "note": "no FINNHUB_API_KEY set"}
+
+    try:
+        url = "https://finnhub.io/api/v1/stock/congressional-trading"
+        params = {"symbol": ticker, "token": FINNHUB_API_KEY}
+        resp = requests.get(url, params=params, timeout=10)
+        print(f"[congress-finnhub] status={resp.status_code} body={resp.text[:300]}")
+
+        if resp.status_code != 200:
+            return {"active": False, "trades": [], "note": f"HTTP {resp.status_code}"}
+
+        payload = resp.json()
+        trades = payload.get("data", [])
+        return {"active": True, "trades": trades}
+    except Exception as e:
+        print(f"[congress-finnhub] exception: {e}")
+        return {"active": False, "trades": [], "note": str(e)}
 
 
 # ---------------------------------------------------------------------------

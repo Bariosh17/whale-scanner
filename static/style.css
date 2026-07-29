@@ -29,9 +29,9 @@ body {
   align-items: center;
   justify-content: center;
   font-family: 'Great Vibes', cursive;
-  font-size: clamp(60px, 12vw, 160px);
+  font-size: clamp(32px, 5vw, 80px);
   color: var(--amber);
-  opacity: 0.16;
+  opacity: 0.22;
   pointer-events: none;
   user-select: none;
   z-index: 0;

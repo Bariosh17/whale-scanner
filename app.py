@@ -21,7 +21,8 @@ app = Flask(__name__)
 # dates barely change day to day, so they're cached far longer than price
 # data to leave room in the daily quota.
 VOLUME_CACHE_SECONDS = 60 * 60        # 1 hour  (~20 calls x ~24/day = 480/day)
-OPTIONS_CACHE_SECONDS = 60 * 60       # 1 hour  (separate provider/quota)
+OPTIONS_CACHE_SECONDS = 60 * 60       # 1 hour  (20-ticker scan, watch credits)
+POSITION_CACHE_SECONDS = 60 * 5       # 5 minutes (just 1 contract, cheap)
 EARNINGS_CACHE_SECONDS = 24 * 60 * 60  # 1 day   (~20 calls/day)
 INSIDER_CACHE_SECONDS = 60 * 60 * 4   # 4 hours (SEC, no quota, just politeness)
 PORTFOLIO_CACHE_SECONDS = 60 * 60 * 2  # 2 hours (~15 calls x 12/day = 180/day)
@@ -64,7 +65,7 @@ def get_report_data():
     insider_filings = _cached("insider", INSIDER_CACHE_SECONDS, _fetch_insider)
     portfolio = _cached("portfolio", PORTFOLIO_CACHE_SECONDS, scanner.get_portfolio)
     options_positions = _cached(
-        "options_positions", OPTIONS_CACHE_SECONDS, scanner.get_options_positions
+        "options_positions", POSITION_CACHE_SECONDS, scanner.get_options_positions
     )
 
     return {

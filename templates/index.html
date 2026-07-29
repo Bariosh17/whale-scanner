@@ -124,6 +124,24 @@
     </ul>
   </section>
 
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Upcoming Earnings</h2>
+      <span class="panel-tag">Twelve Data</span>
+    </div>
+    <ul class="filing-list">
+      {% for e in data.earnings %}
+      <li>
+        <span class="mono ticker">{{ e.ticker }}</span>
+        <span class="filing-date">{{ e.date }}{% if e.time %} · {{ e.time }}{% endif %}</span>
+        {% if e.eps_estimate %}<span class="ratio-label">est. EPS {{ e.eps_estimate }}</span>{% endif %}
+      </li>
+      {% else %}
+      <li class="empty">No upcoming earnings dates found for the watchlist.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
   <section class="panel locked-panel">
     <div class="panel-head">
       <h2>Congress Trades</h2>

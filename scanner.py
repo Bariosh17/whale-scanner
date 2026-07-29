@@ -13,7 +13,16 @@ SEC_HEADERS = {
     "User-Agent": "WhaleScanner research-tool contact@example.com"
 }
 
-DEFAULT_WATCHLIST = ["AAPL", "TSLA", "NVDA", "AMD", "META", "MSFT", "GOOGL", "AMZN"]
+DEFAULT_WATCHLIST = [
+    # mega-cap tech
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD",
+    # index / sector ETFs (highest options volume in the market)
+    "SPY", "QQQ", "IWM",
+    # popular high-options-volume names
+    "PLTR", "COIN", "SOFI", "SNAP", "UBER",
+    # large-cap financials / other frequently-active names
+    "JPM", "BAC", "DIS", "INTC",
+]
 
 EODHD_API_KEY = None  # add a key here to activate congress trade tracking
 
@@ -76,6 +85,53 @@ def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
             continue
 
     return sorted(results, key=lambda r: r["ratio"], reverse=True)
+
+
+def get_upcoming_earnings(tickers):
+    """
+    Pulls each ticker's next earnings date using Twelve Data's /earnings
+    endpoint, which includes forward estimates alongside history.
+    """
+    if not TWELVE_DATA_API_KEY:
+        return []
+
+    today = datetime.now().date()
+    results = []
+
+    for ticker in tickers:
+        try:
+            url = "https://api.twelvedata.com/earnings"
+            params = {"symbol": ticker, "apikey": TWELVE_DATA_API_KEY}
+            resp = requests.get(url, params=params, timeout=10)
+            payload = resp.json()
+
+            if payload.get("status") == "error":
+                continue
+
+            rows = payload.get("earnings", payload if isinstance(payload, list) else [])
+            upcoming = None
+            for row in rows:
+                try:
+                    row_date = datetime.strptime(row["date"], "%Y-%m-%d").date()
+                except (KeyError, ValueError):
+                    continue
+                if row_date >= today and (upcoming is None or row_date < upcoming["date"]):
+                    upcoming = {
+                        "ticker": ticker,
+                        "date": row_date,
+                        "time": row.get("time", ""),
+                        "eps_estimate": row.get("eps_estimate"),
+                    }
+
+            if upcoming:
+                results.append(upcoming)
+        except Exception:
+            continue
+
+    results.sort(key=lambda r: r["date"])
+    for r in results:
+        r["date"] = r["date"].strftime("%Y-%m-%d")
+    return results
 
 
 _cik_cache = None
@@ -166,7 +222,7 @@ def scan_unusual_options(tickers, volume_oi_ratio=1.0, min_volume=100):
     for ticker in tickers:
         try:
             url = f"https://api.marketdata.app/v1/options/chain/{ticker}/"
-            params = {"dte": 30, "range": "all", "strikeLimit": 20}
+            params = {"dte": 30, "range": "all", "strikeLimit": 10}
             resp = requests.get(url, headers=headers, params=params, timeout=15)
             payload = resp.json()
 

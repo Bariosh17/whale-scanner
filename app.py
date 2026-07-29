@@ -16,7 +16,8 @@ import scanner
 
 app = Flask(__name__)
 
-CACHE_SECONDS = 300  # refresh underlying data at most every 5 minutes
+CACHE_SECONDS = 900  # refresh underlying data at most every 15 minutes
+                      # (bigger watchlist = more API credits per refresh)
 _cache = {"timestamp": 0, "data": None}
 
 
@@ -27,14 +28,15 @@ def get_report_data():
 
     watchlist = scanner.DEFAULT_WATCHLIST
 
-    volume_data = scanner.scan_unusual_volume(watchlist)
-    options_data = scanner.scan_unusual_options(watchlist)
+    volume_data = scanner.scan_unusual_volume(watchlist)[:20]
+    options_data = scanner.scan_unusual_options(watchlist)[:20]
 
     insider_filings = []
     for ticker in watchlist[:4]:  # keep SEC calls light
         insider_filings.extend(scanner.get_recent_insider_filings(ticker))
 
     congress = scanner.get_congress_trades()
+    earnings_data = scanner.get_upcoming_earnings(watchlist)
 
     data = {
         "generated_at": datetime.now().strftime("%b %d, %Y — %H:%M"),
@@ -45,6 +47,7 @@ def get_report_data():
         "options_key_missing": not bool(scanner.MARKETDATA_API_KEY),
         "insider": insider_filings,
         "congress": congress,
+        "earnings": earnings_data,
     }
 
     _cache["data"] = data

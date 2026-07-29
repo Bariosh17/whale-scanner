@@ -51,7 +51,7 @@ def get_report_data():
     )
     earnings_data = _cached(
         "earnings", EARNINGS_CACHE_SECONDS,
-        lambda: scanner.get_upcoming_earnings(watchlist),
+        lambda: scanner.get_upcoming_earnings(),
     )
 
     def _fetch_insider():

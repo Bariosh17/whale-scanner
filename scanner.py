@@ -89,71 +89,68 @@ def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
     return sorted(results, key=lambda r: r["ratio"], reverse=True)
 
 
-def get_upcoming_earnings(tickers):
+def get_upcoming_earnings(days_ahead=14, limit=40):
     """
-    Pulls each ticker's next earnings date using Twelve Data's
-    /earnings_calendar endpoint (forward-looking dates), not /earnings
-    (which only returns historical actual EPS).
+    Pulls the market-wide earnings calendar (not filtered to any watchlist)
+    using Twelve Data's /earnings_calendar endpoint. One API call instead of
+    one per ticker — cheaper and simpler.
     """
     if not TWELVE_DATA_API_KEY:
         return []
 
     today = datetime.now().date()
-    end = today + timedelta(days=180)
-    results = []
+    end = today + timedelta(days=days_ahead)
 
-    for ticker in tickers:
-        try:
-            url = "https://api.twelvedata.com/earnings_calendar"
-            params = {
-                "symbol": ticker,
-                "start_date": today.isoformat(),
-                "end_date": end.isoformat(),
-                "apikey": TWELVE_DATA_API_KEY,
-            }
-            resp = requests.get(url, params=params, timeout=10)
-            payload = resp.json()
+    try:
+        url = "https://api.twelvedata.com/earnings_calendar"
+        params = {
+            "start_date": today.isoformat(),
+            "end_date": end.isoformat(),
+            "apikey": TWELVE_DATA_API_KEY,
+        }
+        resp = requests.get(url, params=params, timeout=15)
+        payload = resp.json()
 
-            if isinstance(payload, dict) and payload.get("status") == "error":
-                print(f"[earnings] {ticker} error: {payload}")
+        if isinstance(payload, dict) and payload.get("status") == "error":
+            print(f"[earnings] error: {payload}")
+            return []
+
+        rows = payload.get("earnings", payload if isinstance(payload, list) else [])
+        if isinstance(rows, dict):
+            # some responses group rows by date key -> list of entries
+            flat = []
+            for entries in rows.values():
+                if isinstance(entries, list):
+                    flat.extend(entries)
+            rows = flat
+
+        results = []
+        for row in rows:
+            date_str = row.get("date") or row.get("report_date")
+            symbol = row.get("symbol") or row.get("ticker")
+            if not date_str or not symbol:
                 continue
+            try:
+                row_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if row_date < today:
+                continue
+            results.append({
+                "ticker": symbol,
+                "date": row_date,
+                "time": row.get("time", ""),
+                "eps_estimate": row.get("eps_estimate"),
+            })
 
-            rows = payload.get("earnings", payload if isinstance(payload, list) else [])
-            if isinstance(rows, dict):
-                # some responses group rows by date key -> list of entries
-                flat = []
-                for entries in rows.values():
-                    if isinstance(entries, list):
-                        flat.extend(entries)
-                rows = flat
+        results.sort(key=lambda r: r["date"])
+        for r in results:
+            r["date"] = r["date"].strftime("%Y-%m-%d")
+        return results[:limit]
 
-            upcoming = None
-            for row in rows:
-                date_str = row.get("date") or row.get("report_date")
-                if not date_str:
-                    continue
-                try:
-                    row_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                except ValueError:
-                    continue
-                if row_date >= today and (upcoming is None or row_date < upcoming["date"]):
-                    upcoming = {
-                        "ticker": ticker,
-                        "date": row_date,
-                        "time": row.get("time", ""),
-                        "eps_estimate": row.get("eps_estimate"),
-                    }
-
-            if upcoming:
-                results.append(upcoming)
-        except Exception as e:
-            print(f"[earnings] {ticker} exception: {e}")
-            continue
-
-    results.sort(key=lambda r: r["date"])
-    for r in results:
-        r["date"] = r["date"].strftime("%Y-%m-%d")
-    return results
+    except Exception as e:
+        print(f"[earnings] exception: {e}")
+        return []
 
 
 _cik_cache = None

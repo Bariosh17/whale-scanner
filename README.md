@@ -36,6 +36,14 @@ command to `gunicorn app:app`, then add a custom domain via CNAME.
 - Congress trades panel is inactive until you add a paid API key
   (EODHD is the cheapest option as of mid-2026) to `EODHD_API_KEY` in
   `scanner.py`.
+- Unusual volume needs a free `TWELVE_DATA_API_KEY` environment variable
+  (twelvedata.com — 800 free calls/day).
+- Unusual options (calls/puts) needs a `MARKETDATA_API_KEY` environment
+  variable (marketdata.app — free 30-day trial, no card required). Each
+  request is filtered to ~20 near-the-money strikes on the nearest ~30-day
+  expiration to conserve credits.
 - SEC requires a descriptive User-Agent on requests — already set in
   `scanner.py`, but update the contact email if you plan to run this
   regularly, per SEC's fair-access guidelines.
+- **Never commit API keys to GitHub.** Always set them as environment
+  variables in Render's dashboard (Settings → Environment), not in the code.

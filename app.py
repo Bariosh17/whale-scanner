@@ -28,6 +28,7 @@ def get_report_data():
     watchlist = scanner.DEFAULT_WATCHLIST
 
     volume_data = scanner.scan_unusual_volume(watchlist)
+    options_data = scanner.scan_unusual_options(watchlist)
 
     insider_filings = []
     for ticker in watchlist[:4]:  # keep SEC calls light
@@ -40,6 +41,8 @@ def get_report_data():
         "watchlist": watchlist,
         "volume": volume_data,
         "volume_key_missing": not bool(scanner.TWELVE_DATA_API_KEY),
+        "options": options_data,
+        "options_key_missing": not bool(scanner.MARKETDATA_API_KEY),
         "insider": insider_filings,
         "congress": congress,
     }

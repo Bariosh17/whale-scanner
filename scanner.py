@@ -141,3 +141,60 @@ def get_congress_trades(ticker=None, limit=20):
     resp = requests.get(url, params=params, timeout=10)
     resp.raise_for_status()
     return {"active": True, "trades": resp.json().get("data", [])}
+
+
+# ---------------------------------------------------------------------------
+# UNUSUAL OPTIONS ACTIVITY (calls vs puts) — Market Data (marketdata.app)
+# ---------------------------------------------------------------------------
+# Free 30-day trial, real OPRA-sourced data. Get a token at marketdata.app,
+# set it as an environment variable called MARKETDATA_API_KEY.
+#
+# Each contract returned costs 1 credit on a real-time/delayed plan, so this
+# deliberately limits each request to ~20 strikes near the money on the
+# nearest ~30-day expiration to keep credit usage low.
+
+MARKETDATA_API_KEY = os.environ.get("MARKETDATA_API_KEY")
+
+
+def scan_unusual_options(tickers, volume_oi_ratio=1.0, min_volume=100):
+    if not MARKETDATA_API_KEY:
+        return []
+
+    headers = {"Authorization": f"Bearer {MARKETDATA_API_KEY}"}
+    results = []
+
+    for ticker in tickers:
+        try:
+            url = f"https://api.marketdata.app/v1/options/chain/{ticker}/"
+            params = {"dte": 30, "range": "all", "strikeLimit": 20}
+            resp = requests.get(url, headers=headers, params=params, timeout=15)
+            payload = resp.json()
+
+            if payload.get("s") != "ok":
+                continue
+
+            for i in range(len(payload.get("optionSymbol", []))):
+                volume = payload["volume"][i] or 0
+                open_interest = payload["openInterest"][i] or 0
+
+                if volume < min_volume:
+                    continue
+                if open_interest > 0 and (volume / open_interest) < volume_oi_ratio:
+                    continue
+
+                results.append({
+                    "ticker": ticker,
+                    "side": payload["side"][i],  # "call" or "put"
+                    "strike": payload["strike"][i],
+                    "dte": payload["dte"][i],
+                    "volume": int(volume),
+                    "open_interest": int(open_interest),
+                    "ratio": round(volume / open_interest, 2) if open_interest else None,
+                    "expiration": datetime.fromtimestamp(
+                        payload["expiration"][i]
+                    ).strftime("%Y-%m-%d"),
+                })
+        except Exception:
+            continue
+
+    return sorted(results, key=lambda r: r["volume"], reverse=True)

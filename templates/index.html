@@ -75,6 +75,39 @@
 
   <section class="panel">
     <div class="panel-head">
+      <h2>Unusual Options Activity</h2>
+      <span class="panel-tag">Market Data · OPRA</span>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Ticker</th><th>Side</th><th>Strike</th><th>Exp</th><th>Vol / OI</th></tr>
+      </thead>
+      <tbody>
+        {% for row in data.options %}
+        <tr class="flag">
+          <td class="mono ticker">{{ row.ticker }}</td>
+          <td class="mono side-{{ row.side }}">{{ row.side|upper }}</td>
+          <td class="mono">${{ "%.2f"|format(row.strike) }}</td>
+          <td class="mono">{{ row.expiration }} ({{ row.dte }}d)</td>
+          <td class="mono">{{ "{:,}".format(row.volume) }} / {{ "{:,}".format(row.open_interest) }}
+            {% if row.ratio %}<span class="ratio-label">{{ row.ratio }}x</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">
+          {% if data.options_key_missing %}
+            Add a free-trial MARKETDATA_API_KEY environment variable to activate this panel.
+          {% else %}
+            No unusual call/put activity detected right now.
+          {% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
       <h2>Insider Filings</h2>
       <span class="panel-tag">SEC EDGAR · Form 4</span>
     </div>

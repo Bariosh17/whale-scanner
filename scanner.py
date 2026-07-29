@@ -74,10 +74,11 @@ PORTFOLIO_HOLDINGS = [
 def get_portfolio():
     """
     Live valuation of PORTFOLIO_HOLDINGS: pulls current price per ticker from
-    Twelve Data's lightweight /price endpoint (1 credit each) and computes
-    cost basis, market value, and gain/loss for each position plus totals.
+    Finnhub's /quote endpoint. Finnhub's free tier allows 60 requests/minute
+    (vs. Twelve Data's 8/minute), which comfortably handles this without
+    throttling or hitting rate limits mid-scan.
     """
-    if not TWELVE_DATA_API_KEY:
+    if not FINNHUB_API_KEY:
         return {"positions": [], "totals": None}
 
     positions = []
@@ -87,12 +88,13 @@ def get_portfolio():
         cost_per_share = h["cost_per_share"]
         current_price = None
         try:
-            url = "https://api.twelvedata.com/price"
-            params = {"symbol": ticker, "apikey": TWELVE_DATA_API_KEY}
+            url = "https://finnhub.io/api/v1/quote"
+            params = {"symbol": ticker, "token": FINNHUB_API_KEY}
             resp = requests.get(url, params=params, timeout=10)
             payload = resp.json()
-            if "price" in payload:
-                current_price = float(payload["price"])
+            price = payload.get("c")  # current price
+            if price:
+                current_price = float(price)
             else:
                 print(f"[portfolio] {ticker} error: {payload}")
         except Exception as e:
@@ -360,7 +362,12 @@ def get_options_positions():
             else:
                 mid = payload.get("mid", [None])[0]
                 last = payload.get("last", [None])[0]
-                entry["current_price"] = mid if mid is not None else last
+                bid = payload.get("bid", [None])[0]
+                ask = payload.get("ask", [None])[0]
+                print(f"[options-position] {symbol} bid={bid} ask={ask} mid={mid} last={last}")
+                # Prefer last-traded price (what trading apps typically show
+                # as "current price") over the bid/ask midpoint.
+                entry["current_price"] = last if last is not None else mid
                 entry["underlying_price"] = payload.get("underlyingPrice", [None])[0]
                 entry["delta"] = payload.get("delta", [None])[0]
                 entry["iv"] = payload.get("iv", [None])[0]

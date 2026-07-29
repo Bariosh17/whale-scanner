@@ -3,12 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Whale Scanner — Market Activity Desk</title>
+<title>Miles & Gario — Market Activity Desk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Great+Vibes&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+
+<div class="bg-logo" aria-hidden="true">MJG</div>
 
 <div class="tape-wrap" aria-hidden="true">
   <div class="tape">
@@ -24,7 +26,7 @@
   <div class="brand">
     <span class="brand-mark">◆</span>
     <div>
-      <h1>WHALE SCANNER</h1>
+      <h1>MILES &amp; GARIO</h1>
       <p class="sub">Unusual activity desk — free data, no black box</p>
     </div>
   </div>
@@ -40,7 +42,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Unusual Volume</h2>
-      <span class="panel-tag">Yahoo Finance · live</span>
+      <span class="panel-tag">Twelve Data · live</span>
     </div>
     <table class="data-table">
       <thead>
@@ -164,7 +166,7 @@
 </main>
 
 <footer>
-  <p>Data: Yahoo Finance &amp; SEC EDGAR, public sources. Not financial advice. Unusual volume ≠ insider knowledge.</p>
+  <p>Data: Twelve Data, Market Data, &amp; SEC EDGAR, public sources. Not financial advice. Unusual volume ≠ insider knowledge.</p>
 </footer>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>

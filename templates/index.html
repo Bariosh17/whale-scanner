@@ -61,7 +61,13 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="empty">No unusual volume in the watchlist right now.</td></tr>
+        <tr><td colspan="5" class="empty">
+          {% if data.volume_key_missing %}
+            Add a free TWELVE_DATA_API_KEY environment variable to activate this panel.
+          {% else %}
+            No unusual volume in the watchlist right now.
+          {% endif %}
+        </td></tr>
         {% endfor %}
       </tbody>
     </table>

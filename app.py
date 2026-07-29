@@ -39,6 +39,7 @@ def get_report_data():
         "generated_at": datetime.now().strftime("%b %d, %Y — %H:%M"),
         "watchlist": watchlist,
         "volume": volume_data,
+        "volume_key_missing": not bool(scanner.TWELVE_DATA_API_KEY),
         "insider": insider_filings,
         "congress": congress,
     }

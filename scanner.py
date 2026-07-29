@@ -3,6 +3,7 @@ scanner.py — data-fetching functions for Whale Scanner.
 Same logic as the original CLI script, refactored for use by a Flask app.
 """
 
+import os
 import statistics
 from datetime import datetime, timedelta
 
@@ -16,43 +17,65 @@ DEFAULT_WATCHLIST = ["AAPL", "TSLA", "NVDA", "AMD", "META", "MSFT", "GOOGL", "AM
 
 EODHD_API_KEY = None  # add a key here to activate congress trade tracking
 
+# Yahoo Finance (yfinance) blocks/rate-limits requests from cloud server IPs,
+# so it fails once deployed even though it works locally. Twelve Data's free
+# tier (800 calls/day) is a real API built for server-side use.
+# Get a free key at https://twelvedata.com and set it as an environment
+# variable called TWELVE_DATA_API_KEY (in Render: Settings > Environment).
+TWELVE_DATA_API_KEY = os.environ.get("TWELVE_DATA_API_KEY")
+
 
 def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
-    import yfinance as yf
+    if not TWELVE_DATA_API_KEY:
+        return []
 
     results = []
     for ticker in tickers:
         try:
-            hist = yf.Ticker(ticker).history(period=f"{lookback_days + 5}d")
-            if len(hist) < lookback_days + 1:
+            url = "https://api.twelvedata.com/time_series"
+            params = {
+                "symbol": ticker,
+                "interval": "1day",
+                "outputsize": lookback_days + 5,
+                "apikey": TWELVE_DATA_API_KEY,
+            }
+            resp = requests.get(url, params=params, timeout=10)
+            payload = resp.json()
+
+            if payload.get("status") == "error" or "values" not in payload:
                 continue
 
-            recent = hist.iloc[-1]
-            baseline = hist["Volume"].iloc[-(lookback_days + 1):-1]
-            avg_volume = statistics.mean(baseline)
+            # Twelve Data returns newest first
+            bars = payload["values"]
+            if len(bars) < lookback_days + 1:
+                continue
+
+            recent = bars[0]
+            baseline_volumes = [float(b["volume"]) for b in bars[1:lookback_days + 1]]
+            avg_volume = statistics.mean(baseline_volumes)
             if avg_volume == 0:
                 continue
 
-            ratio = recent["Volume"] / avg_volume
-            price_change_pct = (recent["Close"] - recent["Open"]) / recent["Open"] * 100
+            recent_volume = float(recent["volume"])
+            recent_open = float(recent["open"])
+            recent_close = float(recent["close"])
+
+            ratio = recent_volume / avg_volume
+            price_change_pct = (recent_close - recent_open) / recent_open * 100
 
             results.append({
                 "ticker": ticker,
-                "volume": int(recent["Volume"]),
+                "volume": int(recent_volume),
                 "avg_volume": int(avg_volume),
                 "ratio": round(ratio, 2),
-                "price": round(float(recent["Close"]), 2),
-                "day_change_pct": round(float(price_change_pct), 2),
+                "price": round(recent_close, 2),
+                "day_change_pct": round(price_change_pct, 2),
                 "unusual": ratio >= volume_multiple,
             })
-        except Exception as e:
-            results.append({"ticker": ticker, "error": str(e)})
+        except Exception:
+            continue
 
-    return sorted(
-        [r for r in results if "error" not in r],
-        key=lambda r: r["ratio"],
-        reverse=True,
-    )
+    return sorted(results, key=lambda r: r["ratio"], reverse=True)
 
 
 _cik_cache = None

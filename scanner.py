@@ -26,6 +26,23 @@ DEFAULT_WATCHLIST = [
 
 EODHD_API_KEY = None  # add a key here to activate congress trade tracking
 
+# Used to filter the market-wide earnings calendar down to companies people
+# actually recognize, instead of every obscure small-cap reporting that week.
+POPULAR_TICKERS = {
+    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA", "AMD", "AVGO",
+    "NFLX", "ORCL", "CRM", "ADBE", "INTC", "QCOM", "MU", "CSCO", "IBM", "NOW",
+    "SPY", "QQQ", "IWM", "DIA",
+    "PLTR", "COIN", "SOFI", "SNAP", "UBER", "LYFT", "SHOP", "PYPL", "SQ", "ABNB",
+    "RIVN", "LCID", "F", "GM", "DIS", "NKE", "SBUX", "MCD", "CMG",
+    "JPM", "BAC", "WFC", "GS", "MS", "C", "V", "MA", "AXP",
+    "XOM", "CVX", "COP", "BA", "CAT", "GE", "LMT", "RTX",
+    "WMT", "COST", "TGT", "HD", "LOW",
+    "JNJ", "PFE", "UNH", "MRK", "LLY", "ABBV", "CVS",
+    "T", "VZ", "TMUS",
+    "KO", "PEP", "PG", "MDLZ",
+}
+
+
 # Yahoo Finance (yfinance) blocks/rate-limits requests from cloud server IPs,
 # so it fails once deployed even though it works locally. Twelve Data's free
 # tier (800 calls/day) is a real API built for server-side use.
@@ -96,7 +113,7 @@ def scan_unusual_volume(tickers, lookback_days=20, volume_multiple=2.5):
 FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY")
 
 
-def get_upcoming_earnings(days_ahead=14, limit=40):
+def get_upcoming_earnings(days_ahead=30, limit=40):
     """
     Pulls the market-wide earnings calendar (not filtered to any watchlist)
     from Finnhub's free /calendar/earnings endpoint.
@@ -127,6 +144,8 @@ def get_upcoming_earnings(days_ahead=14, limit=40):
             date_str = row.get("date")
             symbol = row.get("symbol")
             if not date_str or not symbol:
+                continue
+            if symbol.upper() not in POPULAR_TICKERS:
                 continue
             try:
                 row_date = datetime.strptime(date_str, "%Y-%m-%d").date()
